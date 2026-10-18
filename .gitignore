@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+src/*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Binary pickle cache & heavy Ghidra databases (keep README.md and sample forensic JSONs/YARA rules tracked)
+.analysis_cache/_capa_ruleset_cache.pkl
+.analysis_cache/1d4902a04d99e8ccbfe7085e63155955fee397449d386453f6c452ae407b8743/
+ghidra_projects/*/
+!ghidra_projects/README.md
+
+# Upstream reference clone (avoid nested .git submodule issues on GitHub push)
+reference/rizin-mcp/

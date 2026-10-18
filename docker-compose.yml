@@ -1,0 +1,14 @@
+services:
+  flare-re-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flare-re-mcp-suite
+    volumes:
+      - ./samples:/workspace/samples:ro
+      - ./reports:/workspace/flare-re-mcp/reports
+      - ./.analysis_cache:/workspace/flare-re-mcp/.analysis_cache
+    environment:
+      - FLARE_MCP_STRICT_BASE_DIR=/workspace/samples
+    tty: true
+    stdin_open: true

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flare-re-mcp"
+version = "1.0.0"
+description = "Unified & Per-Tool Static Analysis MCP Suite for FlareVM, Windows & Linux (DIE, FLOSS, CAPA, Rizin, radare2, Ghidra/PyGhidra, Unpacker, Threat Intel & Mentor) with REA Evidence Ledger & MITRE ATT&CK v20.0 / MS-Learn Cross-Correlation"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.2.0",
+    "rzpipe>=0.6.2",
+    "r2pipe>=1.8.0",
+    "flare-capa>=9.4.0",
+    "pefile>=2023.2.7",
+]
+
+[project.optional-dependencies]
+full = [
+    "JPype1>=1.5.2",
+    "pyghidra>=3.0.0",
+    "yara-python>=4.3.0; python_version < '3.14'",
+    "yara-x>=1.0.0",
+]
+
+[project.scripts]
+die-mcp = "flare_re_mcp.die_server:main"
+floss-mcp = "flare_re_mcp.floss_server:main"
+capa-mcp = "flare_re_mcp.capa_server:main"
+rizin-mcp = "flare_re_mcp.rizin_server:main"
+radare2-mcp = "flare_re_mcp.radare2_server:main"
+ghidra-mcp = "flare_re_mcp.ghidra_server:main"
+unpacker-mcp = "flare_re_mcp.unpacker_server:main"
+threat-intel-mcp = "flare_re_mcp.threat_intel_server:main"
+flare-secops-qa = "flare_re_mcp.orchestrator_qa:main"
+flare-re-update = "flare_re_mcp.auto_updater:main"
+flare-re-mentor = "flare_re_mcp.mentor_engine:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

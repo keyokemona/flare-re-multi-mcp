@@ -1,0 +1,9 @@
+{
+  "hooks": [
+    {
+      "event": "session_start",
+      "description": "Verificação rápida não-bloqueante de integridade e atualização dos componentes do flare-re-mcp ao iniciar o Antigravity CLI (agy).",
+      "command": "python -m flare_re_mcp.auto_updater --startup-hook"
+    }
+  ]
+}
