@@ -22,3 +22,7 @@ ghidra_projects/*/
 
 # Upstream reference clone (avoid nested .git submodule issues on GitHub push)
 reference/rizin-mcp/
+
+# Analysis caching and reports folder
+reports/
+.analysis_cache/

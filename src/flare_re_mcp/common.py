@@ -627,33 +627,173 @@ def get_cached_capa_ruleset() -> Any:
     return _SHARED_CAPA_RULESET
 
 
-def sanitize_mermaid_syntax(markdown_content: str) -> str:
-    """Automatically sanitize Mermaid blocks in Markdown reports to prevent parser errors:
-    1. Replace non-breaking spaces (\\u00a0, \\u202f, \\u2007) with standard ASCII spaces.
-    2. Replace backslash-escaped quotes (\\\") inside Mermaid blocks with `#quot;` (e.g., `Del /f /q #quot;%s#quot;`).
-    3. Separate accidentally concatenated node definitions/edges on the same line (e.g. `..."]    FMT -->` -> `..."]\\n    FMT -->`).
+def sanitize_markdown_report_formatting(markdown_content: str) -> str:
+    """Sanitize and normalize Markdown report formatting according to DevSecOps & CommonMark standards:
+    1. Ensure every code block (especially ```mermaid ... ```) ends with an explicit newline (\\n) before closing ```.
+    2. Ensure at least two newlines (\\n\\n) exist after any code block closure before dividers (---) or headings (##).
+    3. Ensure at least two newlines (\\n\\n) exist between dividers (---) and headings (##).
+    4. In Mermaid node formatting, ensure directory paths with backslashes (ex: %TEMP%\\caminho\\) have double backslashes (\\\\).
+    5. Normalize invisible whitespace (\\u00A0, \\u202F, \\u2007, \\u200B, \\uFEFF, etc.) to standard ASCII spaces.
     """
     if not markdown_content:
         return markdown_content
 
+    # Step A: Normalize Unicode whitespace globally (Rule 4)
+    for ws in ("\u00a0", "\u202f", "\u2007", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004", "\u2005", "\u2006", "\u2008", "\u2009", "\u200a", "\u205f", "\u3000"):
+        markdown_content = markdown_content.replace(ws, " ")
+    for zw in ("\u200b", "\u200c", "\u200d", "\ufeff"):
+        markdown_content = markdown_content.replace(zw, "")
+
+    # Step B: Separate any accidentally joined code block delimiters on the same line
+    # e.g.: `...child_process.exec"]```---## 4. Engenharia`
+    # 1. Non-newline character immediately before closing ```
+    markdown_content = re.sub(r'([^\n\r`])(```+)', r'\1\n\2', markdown_content)
+
+    # 2. ``` followed immediately by --- or ##
+    markdown_content = re.sub(r'(```+)[ \t]*(?:---|\n---)[ \t]*(?:##|#|\n##|\n#)', r'\1\n\n---\n\n##', markdown_content)
+    markdown_content = re.sub(r'(```+)[ \t]*(?:---|\n---)', r'\1\n\n---', markdown_content)
+    markdown_content = re.sub(r'(```+)[ \t]*(\n*#{1,6}\s+)', r'\1\n\n\2', markdown_content)
+
+    # 3. Divider (---) separated from a subsequent heading by at least two newlines (\n\n)
+    markdown_content = re.sub(r'(---)[ \t]*(\n*#{1,6}\s+)', r'\1\n\n\2', markdown_content)
+
+    # Step C: Sanitize Mermaid code blocks specifically
     def _clean_mermaid_block(match: re.Match) -> str:
         header = match.group(1)
         body = match.group(2)
         footer = match.group(3)
-        # 1. Strip non-breaking spaces in indentation and labels
-        body = body.replace("\u00a0", " ").replace("\u202f", " ").replace("\u2007", " ").replace("\ufeff", "")
-        # 2. Replace escaped quotes \" with #quot; so Mermaid parser does not close node label prematurely
-        body = body.replace('\\"', "#quot;")
-        # 3. Split concatenated statements after a closing node bracket on the same line
-        body = re.sub(r'(\"\s*[\]\)\}])\s+([A-Za-z0-9_]+\s*(?:-->|---|-\.-|==>))', r"\1\n    \2", body)
-        return f"{header}{body}{footer}"
 
-    return re.sub(
+        # 1. Strip non-breaking and zero-width spaces in indentation and labels
+        for ws in ("\u00a0", "\u202f", "\u2007", "\u2000", "\u2001", "\u2002", "\u2003", "\u2004", "\u2005", "\u2006", "\u2008", "\u2009", "\u200a", "\u205f", "\u3000"):
+            body = body.replace(ws, " ")
+        for zw in ("\u200b", "\u200c", "\u200d", "\ufeff"):
+            body = body.replace(zw, "")
+
+        # 2. Repair previously damaged labels where closing quotes were eaten (e.g. `\#quot;]` or `\\#quot;]` -> `\\"]`)
+        body = re.sub(r'\\*#quot;\s*([\]\)\}])', r'\\"]', body)
+        body = re.sub(r'(?<![A-Za-z0-9_])#quot;\s*([\]\)\}])', r'"]', body)
+
+        # 3. Normalize edge labels with quotes: `A -- "text" --> B` -> `A -->|text| B`
+        def _fix_edge_quotes(m: re.Match) -> str:
+            edge_text = m.group(2).strip()
+            if (edge_text.startswith('"') and edge_text.endswith('"')) or (edge_text.startswith("'") and edge_text.endswith("'")):
+                edge_text = edge_text[1:-1]
+            edge_text = edge_text.replace('"', '#quot;')
+            return f"-->|{edge_text}|"
+
+        body = re.sub(r'(--|-->)\s*\"([^\"]+)\"\s*(-->|-->|\s*>\s*)', _fix_edge_quotes, body)
+
+        # 4. Process line by line to sanitize node labels
+        lines = body.splitlines()
+        cleaned_lines = []
+
+        for line in lines:
+            line_str = line
+
+            # Match node declarations with quotes: `A["content"]`, `B{"content"}`, `C("content")`, `D(["content"])`, etc.
+            def _clean_node_label(m: re.Match) -> str:
+                prefix = m.group(1)
+                content = m.group(2)
+                suffix = m.group(3)
+
+                # Rule 3: Ensure directory paths with backslashes have double backslashes (\\)
+                # If there are forward slashes at the end of Windows paths from a previous run (e.g. `HyperSuiteSmartPack/`),
+                # restore them to Windows backslash format `HyperSuiteSmartPack\\` (excluding URLs like https://.../kqq/)
+                if not re.search(r'https?://[^\s"]+/$', content):
+                    if re.search(r'(?:%[A-Za-z0-9_]+%|[A-Za-z]:|\\)', content):
+                        content = re.sub(r'([A-Za-z0-9_%-]+)/$', r'\1\\\\', content)
+
+                # Escape lone backslashes that are not already part of a double backslash:
+                # (?<!\\)\\(?!\\) matches any single backslash not preceded or followed by another backslash
+                content = re.sub(r'(?<!\\)\\(?!\\)', r'\\\\', content)
+
+                # Ensure trailing backslash before closing quote is always doubled:
+                # If content ends with an odd number of backslashes, add one to ensure it is escaped
+                trailing_count = 0
+                for ch in reversed(content):
+                    if ch == '\\':
+                        trailing_count += 1
+                    else:
+                        break
+                if trailing_count > 0 and trailing_count % 2 != 0:
+                    content += '\\'
+
+                # Inside content: replace any raw unescaped quotes with #quot;
+                content = re.sub(r'(?<!\\)\"', '#quot;', content)
+
+                # Replace unescaped angle brackets like <timestamp> with &lt;timestamp&gt;
+                content = re.sub(r'<(?!\/?(?:br|b|i|u|span)\b)([^>]+)>', r'&lt;\1&gt;', content)
+
+                return f"{prefix}{content}{suffix}"
+
+            line_str = re.sub(
+                r'([A-Za-z0-9_]+\s*(?:\[\"|\(\"|\{\")|\[\(\"|\[\[\"|\(\[\")(.*?)(\"\]|\"\}|\"\)|\"\)\]|\"\]\]|\"\)\])',
+                _clean_node_label,
+                line_str
+            )
+
+            # Check for unquoted node labels with parentheses, colons, or special characters:
+            # e.g. `A[Inno Setup Exec(): Dispara]` -> `A["Inno Setup Exec(): Dispara"]`
+            def _quote_unquoted_square(m: re.Match) -> str:
+                node_id = m.group(1)
+                raw_content = m.group(2)
+                if raw_content.startswith('"') and raw_content.endswith('"'):
+                    return m.group(0)
+                if any(c in raw_content for c in "():/\\%\""):
+                    safe_content = raw_content.replace('"', '#quot;')
+                    safe_content = re.sub(r'(?<!\\)\\(?!\\)', r'\\\\', safe_content)
+                    return f'{node_id}["{safe_content}"]'
+                return m.group(0)
+
+            line_str = re.sub(r'([A-Za-z0-9_]+)\[([^\]\n]+)\]', _quote_unquoted_square, line_str)
+
+            cleaned_lines.append(line_str)
+
+        body = "\n".join(cleaned_lines)
+
+        # Split concatenated statements after a closing node bracket on the same line
+        body = re.sub(r'(\"\s*[\]\)\}])\s+([A-Za-z0-9_]+\s*(?:-->|---|-\.-|==>))', r"\1\n    \2", body)
+
+        # Rule 1: Ensure Mermaid block always ends with an explicit newline (\n) before closing ```
+        body_trimmed = body.rstrip()
+        return f"{header}{body_trimmed}\n{footer}\n"
+
+    # Apply Mermaid block cleaning
+    markdown_content = re.sub(
         r"(```mermaid[ \t]*\r?\n)(.*?)(```)",
         _clean_mermaid_block,
         markdown_content,
         flags=re.DOTALL,
     )
+
+    # Rule 1 (General): Ensure EVERY code block ends with \n before ```
+    def _ensure_code_block_ending(m: re.Match) -> str:
+        code_header = m.group(1)
+        code_body = m.group(2)
+        code_footer = m.group(3)
+        code_body_clean = code_body.rstrip()
+        return f"{code_header}{code_body_clean}\n{code_footer}"
+
+    markdown_content = re.sub(
+        r"(```[a-zA-Z0-9_-]*[ \t]*\r?\n)(.*?)(```)",
+        _ensure_code_block_ending,
+        markdown_content,
+        flags=re.DOTALL,
+    )
+
+    # Rule 2: Ensure that after closing of any code block (```) there are at least two newlines (\n\n)
+    # before dividers (---) or headings (## / #)
+    markdown_content = re.sub(r'(```+)\s*(?:---|\n---)\s*(?:##|#|\n##|\n#)', r'\1\n\n---\n\n##', markdown_content)
+    markdown_content = re.sub(r'(```+)\s*(?:---|\n---)', r'\1\n\n---', markdown_content)
+    markdown_content = re.sub(r'(```+)\s*(\n*#{1,6}\s+)', r'\1\n\n\2', markdown_content)
+    markdown_content = re.sub(r'(---)\s*(\n*#{1,6}\s+)', r'\1\n\n\2', markdown_content)
+
+    return markdown_content
+
+
+def sanitize_mermaid_syntax(markdown_content: str) -> str:
+    """Wrapper for backward compatibility that runs full Markdown report sanitization."""
+    return sanitize_markdown_report_formatting(markdown_content)
 
 
 def export_markdown_report(file_path: str, markdown_content: str, custom_timestamp: Optional[str] = None) -> str:

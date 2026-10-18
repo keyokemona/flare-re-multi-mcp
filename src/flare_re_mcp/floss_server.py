@@ -102,6 +102,22 @@ def _execute_floss_job(safe_path: str, min_length: int, include_static: bool) ->
     raw = proc.stdout or ""
     brace_idx = raw.find("{")
     if brace_idx == -1:
+        # If the sample is ELF or non-PE, FLOSS string emulation fails. Fall back to static strings.
+        err_msg = (proc.stderr or raw).strip()
+        if "supports the following formats" in err_msg or include_static:
+            fallback_cmd = [FLOSS_BIN, "-q", "-j", "-n", str(max(3, int(min_length))), "--only", "static", "--", safe_path]
+            proc_fb = subprocess.run(
+                fallback_cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600,
+            )
+            raw = proc_fb.stdout or ""
+            brace_idx = raw.find("{")
+
+    if brace_idx == -1:
         raise RuntimeError(f"FLOSS failed to produce JSON output: {(proc.stderr or raw).strip()}")
 
     data = json.loads(raw[brace_idx:])

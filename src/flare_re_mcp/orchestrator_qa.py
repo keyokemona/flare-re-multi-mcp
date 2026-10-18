@@ -347,13 +347,13 @@ def audit_execution_queue(
         except Exception as exc:
             yara_matches = [f"error: {exc}"]
 
-    from flare_re_mcp.common import sanitize_mermaid_syntax
+    from flare_re_mcp.common import sanitize_markdown_report_formatting, sanitize_mermaid_syntax
 
     if artifact_report_path and os.path.exists(artifact_report_path):
         try:
             with open(artifact_report_path, "r", encoding="utf-8") as rf:
                 orig_art = rf.read()
-            cleaned_art = sanitize_mermaid_syntax(orig_art)
+            cleaned_art = sanitize_markdown_report_formatting(orig_art)
             if cleaned_art != orig_art:
                 with open(artifact_report_path, "w", encoding="utf-8") as wf:
                     wf.write(cleaned_art)
@@ -374,7 +374,7 @@ def audit_execution_queue(
             try:
                 with open(rep_file, "r", encoding="utf-8") as rf:
                     orig_rep = rf.read()
-                cleaned_rep = sanitize_mermaid_syntax(orig_rep)
+                cleaned_rep = sanitize_markdown_report_formatting(orig_rep)
                 if cleaned_rep != orig_rep:
                     with open(rep_file, "w", encoding="utf-8") as wf:
                         wf.write(cleaned_rep)

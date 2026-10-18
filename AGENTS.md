@@ -17,7 +17,13 @@ Sempre que o usuário interagir neste workspace, siga rigorosamente os fluxos ab
      - Execute `ti_lookup_binary_reputation` e `ti_lookup_iocs` (consultando MalwareBazaar, ThreatFox, URLhaus e VirusTotal v3 estritamente por Hash/IOC, sem jamais fazer upload do arquivo binário) e complemente com buscas web OSINT (`search_web`).
 
 4. **Quality Gate Obrigatório de 8 Estágios, Sintaxe Mermaid e Cópia em `./reports/`**:
-   - **Sintaxe Mermaid nos Relatórios**: Dentro de blocos ```` ```mermaid ````, **nunca** utilize aspas escapadas com barra invertida (`\"`) dentro de rótulos de nós `["..."]` (utilize sempre a entidade HTML **`#quot;`**, ex.: `Del /f /q #quot;%s#quot;`, ou aspas simples `'...'`), nunca utilize *non-breaking spaces* (`\u00A0`) na indentação e sempre coloque cada aresta (`A --> B`) em sua própria linha.
+   - **Formatação de Markdown e Sintaxe Mermaid nos Relatórios**:
+     - **Fechamento Explícito de Code Blocks**: Todo bloco de código (especialmente ```` ```mermaid ````) deve terminar sempre com uma quebra de linha explícita (`\n`) antes do fechamento triplo de crases (```` ``` ````).
+     - **Espaçamento Pós-Bloco**: Após o fechamento de qualquer code block, devem existir pelo menos duas quebras de linha (`\n\n`) antes de divisores (`---`) ou novos cabeçalhos (`##`), bem como entre divisores e novos cabeçalhos.
+     - **Caminhos com Contrabarras Windows**: Caminhos de diretório contendo contrabarras (ex.: `%TEMP%\\caminho\\`) devem ter as barras devidamente escapadas como dupla barra (`\\`) para evitar conflitos de escape léxico no Mermaid.
+     - **Aspas e Delimitadores Internos**: **Nunca** utilize aspas escapadas com barra invertida (`\"`) dentro de rótulos de nós `["..."]` (utilize sempre a entidade HTML **`#quot;`**, ex.: `Del /f /q #quot;%s#quot;`, ou aspas simples `'...'`).
+     - **Arestas com Rótulos**: Utilize sempre a sintaxe padrão de pipe `-->|rótulo|` (ex.: `R -->|task.e| S`) em vez de `-- "rótulo" -->`.
+     - **Normalização de Espaços**: Nunca utilize *non-breaking spaces* (`\u00A0`) ou caracteres invisíveis; use sempre espaços ASCII padrão (`\x20`) e coloque cada aresta (`A --> B`) em sua própria linha.
    - Salve o relatório final em `./reports/<YYYY-MM-DD_HH-MM-SS>_<nome_do_arquivo>_<sha256[:12]>.md`.
-   - Ao final, execute `python -m flare_re_mcp.orchestrator_qa "<binario>" --artifact-report "<caminho_do_artifact_md>"` (que também sanitiza blocos Mermaid automaticamente) e valide `"overall_quality_gate": "PASSED"`.
+   - Ao final, execute `python -m flare_re_mcp.orchestrator_qa "<binario>" --artifact-report "<caminho_do_artifact_md>"` (que sanitiza e repara automaticamente blocos Mermaid e Markdown via `common.sanitize_markdown_report_formatting`) e valide `"overall_quality_gate": "PASSED"`.
 
